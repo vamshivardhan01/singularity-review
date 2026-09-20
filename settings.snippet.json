@@ -1,0 +1,33 @@
+{
+  "_comment": "Reference only — install.sh performs this merge programmatically and idempotently. Shown here so the shape is auditable without reading the installer. Never overwrites settings.json; only appends to hooks[event] arrays that don't already contain the command.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [{ "type": "command", "command": "node ~/.claude/hooks/singularity-review/charter-inject.js" }]
+      }
+    ],
+    "UserPromptSubmit": [
+      { "hooks": [{ "type": "command", "command": "node ~/.claude/hooks/singularity-review/stack-switch-inject.js" }] },
+      { "hooks": [{ "type": "command", "command": "node ~/.claude/hooks/singularity-review/drift-watch.js" }] }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [{ "type": "command", "command": "node ~/.claude/hooks/singularity-review/guard.js" }]
+      }
+    ],
+    "PostToolUseFailure": [
+      { "hooks": [{ "type": "command", "command": "node ~/.claude/hooks/singularity-review/mistake-ledger.js" }] }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          { "type": "command", "command": "node ~/.claude/hooks/singularity-review/mistake-ledger.js" },
+          { "type": "command", "command": "node ~/.claude/hooks/singularity-review/scan-on-write.js" }
+        ]
+      }
+    ]
+  }
+}

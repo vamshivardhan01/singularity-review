@@ -1,0 +1,15 @@
+# OS / editor junk
+.DS_Store
+Thumbs.db
+*.swp
+
+# Local settings that could carry secrets — never commit these
+settings.local.json
+*.local.json
+.env
+.env.*
+
+# Runtime state this tool writes locally, not source
+state/
+handoffs/
+*.bak.*
