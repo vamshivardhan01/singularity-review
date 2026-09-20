@@ -1,0 +1,54 @@
+{
+  "name": "@vamshivardhan01/singularity-review",
+  "version": "0.1.0",
+  "description": "Infra-specific code review for Claude Code, Kiro, and Codex: Terraform, Helm, Kubernetes, ArgoCD/GitOps, AWS IAM.",
+  "bin": {
+    "singularity-review": "bin/cli.js"
+  },
+  "files": [
+    "bin/",
+    "skills/",
+    "agents/",
+    "references/",
+    "hooks/",
+    "kiro/",
+    "settings.snippet.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "install-hooks": "node bin/cli.js"
+  },
+  "keywords": [
+    "claude-code",
+    "code-review",
+    "terraform",
+    "kubernetes",
+    "helm",
+    "argocd",
+    "gitops",
+    "infrastructure-as-code",
+    "ai-code-review",
+    "kiro"
+  ],
+  "author": "Vamshi Vardhan",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vamshivardhan01/singularity-review.git"
+  },
+  "homepage": "https://github.com/vamshivardhan01/singularity-review#readme",
+  "bugs": {
+    "url": "https://github.com/vamshivardhan01/singularity-review/issues"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "os": [
+    "darwin",
+    "linux"
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
+}

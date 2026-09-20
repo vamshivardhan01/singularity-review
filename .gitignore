@@ -13,3 +13,4 @@ settings.local.json
 state/
 handoffs/
 *.bak.*
+node_modules/

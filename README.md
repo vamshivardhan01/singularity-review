@@ -44,7 +44,11 @@ flowchart LR
 
 ## Getting Started
 
-**Claude Code:** `bash install.sh` symlinks skills/agents into `~/.claude` and merges (never overwrites) hook entries into `settings.json`. Idempotent, safe to re-run.
+**Claude Code:**
+```bash
+npx @vamshivardhan01/singularity-review
+```
+Symlinks skills/agents/hooks into `~/.claude` and merges (never overwrites) hook entries into `settings.json`. Idempotent, safe to re-run. Requires Node 18+. macOS/Linux (Windows: use WSL). No install needed — `npx` runs it directly; `npm i -g @vamshivardhan01/singularity-review` if you want the `singularity-review` command kept around. Cloned the repo instead of using npm? `bash install.sh` does the same thing.
 
 **Kiro:** ready agent config at `kiro/singularity-review.json`.
 ```bash
@@ -90,5 +94,10 @@ references/                  stack-specific failure taxonomies + shared severity
 hooks/singularity-review/    6 Claude Code hooks (see Hooks table above)
 research/findings.md         design lessons from real runs, each tied to a concrete change above
 kiro/, settings.snippet.json install configs for Kiro and Claude Code
-install.sh                   symlinks skills/agents/hooks into ~/.claude, idempotent
+bin/cli.js                   the installer (Node stdlib only, no dependencies)
+install.sh                   thin bash shim -> bin/cli.js, for non-npm clones
 ```
+
+## License
+
+Apache-2.0 — see [`LICENSE`](LICENSE).
