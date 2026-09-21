@@ -1,0 +1,46 @@
+name: Sync wiki
+
+# Publishes wiki/*.md in this repo to the GitHub wiki whenever main changes.
+# One-time setup required before this will work:
+#   1. Settings > General > Features > enable "Wikis", then create any first
+#      page by hand in the wiki UI (GitHub won't let a wiki repo be pushed to
+#      until it has at least one commit).
+#   2. Create a classic PAT with the `repo` scope (wiki push isn't covered by
+#      the default GITHUB_TOKEN), add it as a repo secret named WIKI_SYNC_TOKEN.
+# Until both are done, this workflow will fail on push — that's expected;
+# the wiki/*.md files are still the source of truth, just paste them into
+# the wiki UI by hand in the meantime.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "wiki/**"
+  workflow_dispatch: {}
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Push wiki/ to the GitHub wiki
+        env:
+          WIKI_SYNC_TOKEN: ${{ secrets.WIKI_SYNC_TOKEN }}
+        run: |
+          if [ -z "$WIKI_SYNC_TOKEN" ]; then
+            echo "::warning::WIKI_SYNC_TOKEN secret not set, skipping wiki sync. See comments at the top of this workflow file."
+            exit 0
+          fi
+          git clone "https://x-access-token:${WIKI_SYNC_TOKEN}@github.com/${{ github.repository }}.wiki.git" wiki-repo
+          cp wiki/*.md wiki-repo/
+          cd wiki-repo
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No wiki changes to publish."
+            exit 0
+          fi
+          git commit -m "Sync wiki from main (${{ github.sha }})"
+          git push

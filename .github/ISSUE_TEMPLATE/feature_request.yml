@@ -1,0 +1,21 @@
+name: Feature request
+description: Propose a change to what Singularity Review checks or how it works
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What's missing or wrong today
+      description: What kind of infra bug would this catch that currently slips through, or what workflow does this improve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: A real PR, a false negative you hit, or a false positive that wasted your time. Concrete examples get prioritized over general requests, per this repo's own testing philosophy.

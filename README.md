@@ -1,5 +1,7 @@
 # Singularity Review
 
+[![CI](https://github.com/vamshivardhan01/singularity-review/actions/workflows/ci.yml/badge.svg)](https://github.com/vamshivardhan01/singularity-review/actions/workflows/ci.yml)
+
 Infra-specific code review for Claude Code, Kiro, and Codex: Terraform, Helm, Kubernetes, ArgoCD/GitOps, AWS IAM.
 
 ## Executive Summary
@@ -30,6 +32,8 @@ flowchart LR
 | Architecture | Who consumes this, and what breaks when it changes? |
 | SRE | How does this page someone at 3am? Is there a test catching it before prod? |
 | Backend | Is this operation safe to run twice? |
+
+See the [Architecture Deep Dive](https://github.com/vamshivardhan01/singularity-review/wiki/Architecture-Deep-Dive) wiki page for what each lens owns and asks in full.
 
 ## Key Decisions
 
@@ -82,6 +86,10 @@ kiro-cli chat --agent singularity-review
 
 `skills/singularity-review/eval/` is a small golden dataset: real PRs with confirmed ground truth, used to check that a change to the agent or skill files doesn't regress what it catches. Currently 2 cases; see `eval/README.md` for how to add more and what shapes are still missing.
 
+## Contributing
+
+PRs need one approval (via [`CODEOWNERS`](.github/CODEOWNERS)) and a green [CI run](.github/workflows/ci.yml) before they merge into `main` — see [CONTRIBUTING.md](CONTRIBUTING.md) for the dev workflow and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md). Found a security issue? See [SECURITY.md](SECURITY.md) instead of opening a public issue. Deeper design rationale and open questions live on the [wiki](https://github.com/vamshivardhan01/singularity-review/wiki).
+
 ## Repo Layout
 
 ```
@@ -96,6 +104,8 @@ research/findings.md         design lessons from real runs, each tied to a concr
 kiro/, settings.snippet.json install configs for Kiro and Claude Code
 bin/cli.js                   the installer (Node stdlib only, no dependencies)
 install.sh                   thin bash shim -> bin/cli.js, for non-npm clones
+wiki/                        source for the GitHub wiki, synced to it on merge to main
+.github/                     CI, issue/PR templates, CODEOWNERS, dependabot
 ```
 
 ## License

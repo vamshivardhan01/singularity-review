@@ -1,0 +1,32 @@
+name: Bug report
+description: Something in Singularity Review isn't working as expected
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did you expect, and what did you get instead?
+    validations:
+      required: true
+  - type: dropdown
+    id: agent
+    attributes:
+      label: Which agent are you using
+      options:
+        - Claude Code
+        - Kiro
+        - Codex / other
+    validations:
+      required: true
+  - type: textarea
+    id: stack
+    attributes:
+      label: Stack and diff shape
+      description: What was being reviewed (Terraform, Helm, Kubernetes, ArgoCD, IAM)? Rough diff size?
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant report output or logs
+      render: shell

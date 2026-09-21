@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+
+      - name: Validate JSON files
+        run: |
+          for f in package.json kiro/singularity-review.json settings.snippet.json; do
+            echo "Checking $f"
+            node -e "JSON.parse(require('fs').readFileSync('$f', 'utf8'))"
+          done
+
+      - name: Check JS syntax (bin + hooks)
+        run: |
+          for f in bin/cli.js hooks/singularity-review/*.js; do
+            echo "Checking $f"
+            node --check "$f"
+          done
+
+      - name: Check install.sh syntax
+        run: bash -n install.sh
+
+      - name: Verify symlinks are real symlinks
+        run: |
+          for link in skills/building-platform-code/references skills/singularity-review/references skills/singularity-review/scripts; do
+            if [ ! -L "$link" ]; then
+              echo "::error::$link is not a symlink (this repo has hit this bug before, from non-symlink-preserving syncs)"
+              exit 1
+            fi
+            if [ ! -e "$link" ]; then
+              echo "::error::$link is a broken symlink"
+              exit 1
+            fi
+          done
+
+      - name: npm pack dry run
+        run: npm pack --dry-run
+
+      - name: ShellCheck install.sh
+        uses: ludeeus/action-shellcheck@2.0.0
+        with:
+          scandir: "."
+          ignore_names: "cli.js"
+          check_together: "no"
+        env:
+          SHELLCHECK_OPTS: --shell=bash
