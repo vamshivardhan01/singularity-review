@@ -8,7 +8,27 @@
 // expansion) with zero test coverage to catch it.
 
 const assert = require('assert');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 const { evaluateCommand } = require('../hooks/singularity-review/guard.js');
+
+// Real-filesystem fixtures for the stale-plan-file predicate (DENY_RULES
+// entry #3, `isStalePlanFile`) -- every case below that passes cwd=null
+// short-circuits that function before it ever touches disk (`if (!cwd)
+// return false`), so it had zero real exercise despite the suite "passing."
+// These two temp dirs give it an actual mtime comparison to make.
+const staleDir = fs.mkdtempSync(path.join(os.tmpdir(), 'guard-test-stale-'));
+fs.writeFileSync(path.join(staleDir, 'tfplan'), '');
+fs.utimesSync(path.join(staleDir, 'tfplan'), new Date(1000), new Date(1000));
+fs.writeFileSync(path.join(staleDir, 'main.tf'), '');
+fs.utimesSync(path.join(staleDir, 'main.tf'), new Date(2000), new Date(2000)); // newer than the plan -> stale
+
+const freshDir = fs.mkdtempSync(path.join(os.tmpdir(), 'guard-test-fresh-'));
+fs.writeFileSync(path.join(freshDir, 'main.tf'), '');
+fs.utimesSync(path.join(freshDir, 'main.tf'), new Date(1000), new Date(1000));
+fs.writeFileSync(path.join(freshDir, 'tfplan'), '');
+fs.utimesSync(path.join(freshDir, 'tfplan'), new Date(2000), new Date(2000)); // newer than every .tf -> not stale
 
 // [command, cwd, expectedDecision ('deny'|'ask'|null), description]
 const CASES = [
@@ -61,9 +81,18 @@ const CASES = [
   ['kubectl $(echo delete) ns staging', null, 'ask', 'expansion hides the verb itself, so the literal deny regex cannot match, but the keyword+expansion heuristic catches it'],
   ['echo "$(terraform destroy)"', null, 'ask', 'expansion nested inside a quoted echo argument still executes in a real shell'],
 
+  // --- Follow-up bypass, found and fixed after the P0: bash special parameters ---
+  ['function t() { terraform "$@"; }; t destroy', null, 'ask', 'shell-function wrapper using $@ evaded the original named-variable-only pattern entirely'],
+  ['function t() { terraform "$1"; }; t destroy', null, 'ask', 'positional parameter $1, same class of gap'],
+
   // --- No false positive: expansion alone, without a dangerous keyword, is fine ---
   ['echo $(date)', null, null, 'expansion with no dangerous keyword present is fine'],
   ['ls $HOME/projects', null, null, '$VAR reference with no dangerous keyword is fine'],
+  ['function p() { echo "$@"; }; p hello', null, null, 'special-parameter function wrapper with no dangerous keyword is fine'],
+
+  // --- Stale-plan-file predicate (DENY_RULES #3): real filesystem, not cwd=null ---
+  ['terraform apply tfplan', staleDir, 'deny', 'plan file predates a later .tf change in the same dir -- genuinely stale, real mtime comparison'],
+  ['terraform apply tfplan', freshDir, null, 'plan file postdates every .tf file in the same dir -- genuinely fresh, not stale'],
 ];
 
 let pass = 0, fail = 0;
@@ -79,4 +108,8 @@ for (const [cmd, cwd, expected, desc] of CASES) {
 }
 
 console.log(`${pass} passed, ${fail} failed (${pass + fail} total)`);
+
+fs.rmSync(staleDir, { recursive: true, force: true });
+fs.rmSync(freshDir, { recursive: true, force: true });
+
 if (fail > 0) process.exit(1);

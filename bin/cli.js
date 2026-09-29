@@ -140,13 +140,23 @@ if (fs.existsSync(KIRO_DIR)) {
     const posixKiroDir = KIRO_DIR.split(path.sep).join('/');
     const rendered = template.split('{{KIRO_DIR}}').join(posixKiroDir);
     fs.mkdirSync(path.dirname(kiroAgentTarget), { recursive: true });
-    if (fs.existsSync(kiroAgentTarget) && !isSymlink(kiroAgentTarget)) {
-      const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/, '').replace('T', '');
-      fs.copyFileSync(kiroAgentTarget, `${kiroAgentTarget}.bak.${stamp}`);
-      console.log(`kiro agent config  backed up existing file`);
+    const exists = fs.existsSync(kiroAgentTarget);
+    // Re-running this against its own prior output must be a no-op, same
+    // convention as linkDir's already-linked check above — a real gap found
+    // and fixed here: this used to back up + rewrite unconditionally on
+    // every run, accumulating one new .bak.<timestamp> file per re-install
+    // even when the rendered content hadn't changed at all.
+    if (exists && fs.readFileSync(kiroAgentTarget, 'utf8') === rendered) {
+      console.log('kiro agent config  already up to date, skipped');
+    } else {
+      if (exists && !isSymlink(kiroAgentTarget)) {
+        const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/, '').replace('T', '');
+        fs.copyFileSync(kiroAgentTarget, `${kiroAgentTarget}.bak.${stamp}`);
+        console.log(`kiro agent config  backed up existing file (content changed)`);
+      }
+      fs.writeFileSync(kiroAgentTarget, rendered);
+      console.log('kiro agent config  rendered and written');
     }
-    fs.writeFileSync(kiroAgentTarget, rendered);
-    console.log('kiro agent config  rendered and written');
   } catch (e) {
     console.log(`kiro agent config  FAILED — ${e.message}`);
   }

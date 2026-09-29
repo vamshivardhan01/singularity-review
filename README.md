@@ -7,25 +7,27 @@
 
 Infra-specific code review for Claude Code, Kiro, and Codex: Terraform, Helm, Kubernetes, ArgoCD/GitOps, AWS IAM.
 
-Built by a platform engineer tired of watching generic AI reviewers say "no issues" on a diff that would page someone at 3am. Generic code-review skills are tuned for app code — XSS, N+1 queries, null checks. They have no concept of `terraform destroy`, an ArgoCD `prune`, or an SCP lockout, so they wave infra changes through that aren't actually safe.
+Built by a platform engineer who runs Terraform, Helm, and ArgoCD against real production AWS/Kubernetes infrastructure day to day — this exists because the generic AI reviewers I actually used at work kept saying "no issues" on diffs that would have paged someone at 3am. Generic code-review skills are tuned for app code — XSS, N+1 queries, null checks. They have no concept of `terraform destroy`, an ArgoCD `prune`, or an SCP lockout, so they wave infra changes through that aren't actually safe. *(Bio draft — replace with your own wording/specifics before merge; see the PR description.)*
 
 ## Contents
 - [See It Catch Something](#see-it-catch-something)
 - [How It Works](#how-it-works)
 - [Key Decisions](#key-decisions)
+- [Compared to Generic AI Reviewers](#compared-to-generic-ai-reviewers)
 - [Getting Started](#getting-started)
 - [What Access It Needs](#what-access-it-needs)
 - [Hooks (Claude Code)](#hooks-claude-code)
 - [Risks](#risks)
 - [Testing This Tool](#testing-this-tool)
 - [Contributing](#contributing)
+- [Roadmap & FAQ](#roadmap--faq)
 - [Repo Layout](#repo-layout)
 
 ## See It Catch Something
 
-Real output, from this system's own [golden eval set](skills/singularity-review/eval/cases/pr68.md) (repo name pseudonymized per [`CONTRIBUTING.md`](CONTRIBUTING.md); everything else — the chart, the RBAC grant, the cold-start verification — is a real run against a real PR):
+Real output, from this system's own [golden eval set](skills/singularity-review/eval/cases/pr68.md) (repo and chart names pseudonymized per [`CONTRIBUTING.md`](CONTRIBUTING.md); the RBAC grant, the failure mechanism, and the cold-start verification are a real run against a real PR):
 
-> **[P1] ClusterRole grants `nodes/proxy` cluster-wide with no configured consumer** — `charts/otel-agent/templates/rbac.yaml:35`
+> **[P1] ClusterRole grants `nodes/proxy` cluster-wide with no configured consumer** — `charts/otel-collector/templates/rbac.yaml:35`
 > `get` on `nodes/proxy` authorizes the apiserver's kubelet-exec proxy path — container exec on any node, from this pod's service account token. The pipeline doesn't need it: `scrape_configs: []`, targets arrive as direct endpoints, no apiserver-proxy relabel config anywhere in the rendered output.
 > ↳ caught by platform lens · adversarial-verifier CONFIRMED
 
@@ -71,6 +73,20 @@ See the [Architecture Deep Dive](https://github.com/vamshivardhan01/singularity-
 | `kiro/singularity-review.json`'s deny list is generated, not hand-maintained | It drifted behind `guard.js`'s DENY_RULES once already (missing 3 rules from day one, never caught). `scripts/sync-kiro-deny-list.js` generates it and CI fails if it's out of sync. | `scripts/sync-kiro-deny-list.js` |
 
 All PR/repo identifiers above are pseudonyms from this system's own eval set (see [Testing This Tool](#testing-this-tool)) — real numbers, fictional names, per `CONTRIBUTING.md`.
+
+## Compared to Generic AI Reviewers
+
+CodeRabbit, Greptile, and PR-Agent are all real, useful tools — none of them are built around infra as a first-class concern, and it shows in what they're actually optimized to catch:
+
+| | Generic AI reviewers (CodeRabbit, Greptile, PR-Agent) | Singularity Review |
+|---|---|---|
+| **Trained/tuned for** | App code: style, common bug patterns, PR summarization across any language | Infra-specific failure classes: blast radius, RBAC over-grant, drift, sync behavior, IAM trust boundaries |
+| **Evidence behind a finding** | The model's read of the diff | A real scanner/oracle run first (`terraform validate`, `helm template \| kube-score`, `checkov`) — the model reasons over that output, not just the diff text |
+| **Concept of "destroys state" vs. "adds a file"** | Not modeled — a `terraform destroy` and a comment typo are just two lines in a diff | A hard-coded, hook-level deny list blocks the genuinely irreversible commands regardless of what the model decides (`guard.js`) |
+| **RBAC/IAM reasoning** | General "looks risky" pattern matching, if any | Explicit signal table distinguishing a genuine cluster-wide privilege-escalation grant from routine scoped RBAC (a real, measured cost bug this project hit and fixed — see Key Decisions) |
+| **False-positive handling** | Varies by tool, generally a single pass | A mandatory counter-case search before any finding ships — actively looks for the guard/test/comment that would disprove its own finding |
+
+None of this makes the generic tools worse at what they're for — reviewing app code, they're faster to set up and cover far more languages. This project doesn't compete with them there. It exists for the diffs where "does this compile and look reasonable" isn't the question that matters — "what does this destroy, and has anyone actually confirmed the alternative works" is.
 
 ## Getting Started
 
@@ -120,11 +136,19 @@ kiro-cli chat --agent singularity-review
 
 `skills/singularity-review/eval/` is a small golden dataset: real PRs (repo names pseudonymized, per `CONTRIBUTING.md`) with confirmed ground truth, used to check that a change to the agent or skill files doesn't regress what it catches. Currently 2 cases — the sample in [See It Catch Something](#see-it-catch-something) is pulled directly from one of them; see `eval/README.md` for how to add more and what shapes are still missing. This is the single biggest open reliability gap in the project: every cost/effectiveness tuning decision in the Key Decisions table was reasoned from architecture, and only a couple of them have a regression case backing them. More cases > more features, right now.
 
-`tests/guard.test.js` is a plain regression table (no framework) for `guard.js`'s DENY_RULES matching logic — the exact code class that produced a P0 finding (every hard-deny rule bypassable via shell expansion) with zero coverage to catch it. Run: `node tests/guard.test.js`. Wired into CI.
+`tests/guard.test.js` is a plain regression table (no framework, 48 cases) for `guard.js`'s DENY_RULES matching logic — the exact code class that produced a P0 finding (every hard-deny rule bypassable via shell expansion) with zero coverage to catch it. Includes real-filesystem cases for the stale-plan-file predicate specifically, after an earlier version of this suite passed every case with `cwd: null` and never actually exercised it. Run: `node tests/guard.test.js`. Wired into CI.
 
 ## Contributing
 
-PRs need one approval (via [`CODEOWNERS`](.github/CODEOWNERS)) and a green [CI run](.github/workflows/ci.yml) before they merge into `main` — see [CONTRIBUTING.md](CONTRIBUTING.md) for the dev workflow and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md). Found a security issue? See [SECURITY.md](SECURITY.md) instead of opening a public issue. Deeper design rationale and open questions live on the [wiki](https://github.com/vamshivardhan01/singularity-review/wiki).
+PRs need one approval (via [`CODEOWNERS`](.github/CODEOWNERS)) and a green [CI run](.github/workflows/ci.yml) before they merge into `main` — see [CONTRIBUTING.md](CONTRIBUTING.md) for the dev workflow and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md). Found a security issue? See [SECURITY.md](SECURITY.md) instead of opening a public issue.
+
+**First time here?** The fastest way to help right now isn't a PR — it's running this against a real diff and [opening an issue](https://github.com/vamshivardhan01/singularity-review/issues/new) with what it missed or got wrong. The eval dataset (2 cases as of this writing — see Testing This Tool above) grows from exactly that kind of report, not from more features.
+
+## Roadmap & FAQ
+
+Deeper design rationale and open questions live on the wiki, not buried in commit history:
+- [Roadmap](https://github.com/vamshivardhan01/singularity-review/wiki/Roadmap) — the open items this project's own evidence-first rule is currently blocking on, in rough priority order (growing the eval dataset past 2 cases is #1).
+- [FAQ](https://github.com/vamshivardhan01/singularity-review/wiki/FAQ) — why VERIFY is off by default, why one merged agent instead of four personas, common install issues, and how tiering actually gets decided.
 
 ## Repo Layout
 

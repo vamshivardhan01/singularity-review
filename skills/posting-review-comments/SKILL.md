@@ -17,6 +17,8 @@ Render every finding as a numbered list using the report's own Priority/What/Whe
 
 **This selection is the one and only confirmation gate.** The user's reply (`"1"`, `"2"`, `"all"`) IS the authorization to post — once you have it, proceed all the way through to the actual post without asking again. Do not add a second "proceed?" / "confirm before posting?" prompt after the selection; that's the redundant double-confirm this skill deliberately does not do. No finding gets posted by default (an empty/`"none"` reply posts nothing), but a non-empty selection is a go, not a maybe.
 
+An empty/`"none"` reply skips straight to Step 7 (Steps 3-6 have nothing to do) — log it anyway. A review whose findings were entirely declined is a real, higher-value data point than one that isn't logged at all.
+
 ## Step 3 — Resolve the target PR
 
 If the report's target was already a PR number/URL, use it. Otherwise: `gh pr view --json number,url` for the current branch. No open PR → say so, stop here — this skill has nothing to post to.
@@ -25,22 +27,43 @@ If the report's target was already a PR number/URL, use it. Otherwise: `gh pr vi
 
 For each selected finding, construct `{"path": "...", "line": N, "body": "..."}` — `path` relative to repo root, `line` the line number in the **new** file version (this skill always anchors `side: RIGHT`; nothing in `singularity-review`'s output describes deleted-line findings, so `LEFT` is never needed).
 
-`body` is the finding's **What / Why it matters / Fix** collapsed into a single short paragraph, not the report's own multi-line labeled block — a good inline PR comment reads like a terse, direct human note, not a rendered template. Concretely:
-- No bold priority header, no `**Why it matters:**`/`**Fix:**` labels, no `Where:` line (redundant, the comment already lands on that line), no `↳ caught by / verified` tag (that's for auditing this system, not for the PR author).
-- Lead with `Action required — ` (or `Optional — ` for P2/P3/Nit) followed directly by the mechanism/consequence in one sentence, then the fix in one to two sentences. If there's a reasonable alternative fix, give it as a second short sentence ("Alternatively, ...") rather than a bulleted list.
-- **Structure for scannability, short.** Put the fix on its own line prefixed `Fix:` so a reader sees the ask at a glance — the whole comment is the one-sentence mechanism line, then a `Fix:` line. That's the structure; do not add more headers or a Why/Where/Evidence block (the comment already lands on the line, and the reader picked it). Keep it tight enough to read in one glance.
-- **Hard cap: 3-4 sentences total, ever.** State the wrong/risky thing once, state why it matters once, state the fix once — do not restate the same claim in different words across multiple sentences ("this is wrong; specifically here's what it actually says; which means the claim doesn't hold; so it should say instead..." is four sentences making one point — collapse it to one). If a first draft runs longer, the fix is to cut restatement, not to keep every sentence and hope the reader skims.
-- Quote the minimum source text needed to make the claim self-evident — one short quoted fragment from the wrong claim and, if needed, one from the correct source is enough; do not quote both at full sentence length when a phrase proves the point.
-- Drop `Evidence:`/oracle transcripts from the posted comment entirely — if the evidence is load-bearing for the reader to trust the claim, fold the single most relevant fact into the first sentence instead of appending a separate block.
-- Keep a citation to the PR description, a linked issue, or a specific prior comment if the finding relies on it — strip everything else.
+`body` renders the finding the way an experienced human reviewer actually writes an inline GitHub comment: a short bold title, then the minimum structure that makes it scannable. Structure fixes the old wall-of-prose failure; it is not license to write more — a structured comment can be, and usually should be, just as short as the old paragraph. **Default to the smallest shape that works; add a bullet only when prose genuinely can't carry it.**
 
-Target shape (for calibration, not a template to fill in mechanically — vary the wording so comments don't all read identically):
+**Default shape — title, one line, fix. No bullets.**
 ```
-Action required — <mechanism in one sentence: what actually happens and why>. <Fix in one to two sentences — the specific change, named concretely (variable name, resource, action)>. <Optional: alternative fix in one sentence, only if genuinely useful>.
-```
-Example (good — 3 sentences, one point made once): "Action required — this expiry defeats the oldest-version tamper-evidence guarantee above: after 30 days it permanently removes the genuine oldest version, which a compromised auth role could otherwise have overwritten but not erased. Remove noncurrent-version expiration by default, or set it to an explicitly approved retention period. Also add `s3:DeleteObjectVersion` to the deny policy — denying only `s3:DeleteObject` doesn't stop explicit version deletion."
+**<emoji> <priority> — <specific title naming the actual issue, not a category>**
 
-Anti-pattern (bad — do not write this): "Action required — this citation is wrong: X doesn't say what's claimed. Read directly, it actually says Y. That means the original claim doesn't hold. Suggest rewording to say Z instead." Four sentences, one point ("it's wrong, here's what's actually true, fix it to say that") — collapse to: "Action required — `<claim>` is wrong; `<source>` actually shows `<correct fact, quoted briefly>`. Reword to say `<the fix, stated directly, not as a suggestion to consider>`."
+<one sentence: the mechanism and why it matters, fused, not two clauses stapled together>
+
+**Fix:** <the specific, concrete change, one sentence>
+```
+This covers most findings. Reach for more only when this genuinely can't carry the point.
+
+**Escalation, one step at a time, only if needed:**
+- One fact doesn't fit the sentence without making it run-on → **replace** the sentence with at most 2 bullets, each a fragment (5-12 words), not a restated sentence. Bullets substitute for the sentence, they don't sit alongside it — never sentence-plus-bullets.
+- The claim needs a name/value to be self-evident → put it inline in backticks, in the sentence or a bullet. A separate fenced code block is reserved for a genuine multi-token snippet (a 2-line config excerpt) — reach for it rarely, and never for something a backtick phrase already covers.
+- Never add both bullets *and* a fenced snippet to the same comment — pick the one the point actually needs.
+
+**Title is a specific claim, not a label.** `**🟡 P2 — Worth checking: cross-namespace tracing backend may need a ReferenceGrant**`, not `**🟡 P2 — Configuration issue**`. The title should tell the author what to go look at before they read another word — and for a simple finding, the title plus the one-line fix may be *all* a reader needs.
+
+**`Fix:` stays its own bold line** — fastest way for a skimming author to find the ask. **No `Where:` line** (redundant, the comment already lands on that line) and no `↳ caught by / verified` process tag (that's for auditing this system, not the PR author).
+
+**Hard cap, always: title + ONE body slot (a sentence, or at most 2 bullets in its place) + fix.** Never both a sentence and bullets. If that one slot can't carry the point, the finding is carrying two claims — split what's separable into the summary/a second comment, or cut to the one fact that actually changes what the author does next.
+
+Example (good — default shape, no bullets, this is the common case):
+```
+**🟡 P2 — Worth checking: cross-namespace tracing backend may need a ReferenceGrant**
+
+`backendNamespace: telemetry-system` differs from this release's own namespace, and the chart's own template comment admits it's unconfirmed whether the gateway enforces a ReferenceGrant for this field — a sibling chart in this repo already has the pattern for this, this one doesn't.
+
+**Fix:** add a `ReferenceGrant` in `telemetry-system` admitting the reference from this namespace (follow the sibling chart's precedent), or confirm on a real cluster this field doesn't need one before the sync freeze comes off.
+```
+
+Anti-patterns (both bad): (1) the old failure — one run-on paragraph with no visual break at all; (2) the *new* trap this rewrite exists to prevent — a title plus 3-4 bullets plus a fenced snippet plus a fix, which is technically "structured" but just as slow to read as the paragraph it replaced. A structured comment that's still too long has the same problem as an unstructured one.
+
+**Findings from `singularity-review` are currently UNVERIFIED — frame them that way.** That skill's VERIFY phase is disabled by configuration, so nothing adjudicated these findings; each carries its own evidence and nothing else. Two consequences for the comment you write:
+- Lead with the evidence and the mechanism, and ask for confirmation rather than asserting a verdict. "Rendering X produces Y, which would mean Z — can you confirm?" not "this is broken."
+- The confidence level goes into the title line, not a separate prose lead-in: `**🔴 P0 — <title>**` for a finding whose evidence is a pasted, reproducible oracle result (the title itself asserts it); `**🟡 P2 — Worth checking: <title>**` for anything resting on a traced scenario or an interpretation, where the author's confirmation is genuinely still needed. Overstating confidence is the specific failure mode of this configuration, and a finding the author disproves costs more trust than one phrased as a question.
 
 ## Step 5 — Write the top-level review summary, then dry-run as a self-check
 
@@ -55,6 +78,10 @@ The dry-run is a **self-check you run and review yourself, not a second confirma
 ## Step 6 — Post
 
 Same command without `--dry-run`. Report the returned review URL back to the user — that's the deliverable, not a summary of what was posted.
+
+## Step 7 — Log the outcome
+
+Append a `[posted]` entry to `../singularity-review/eval/results.md` (that file's header has the exact shape) — selected-vs-proposed counts by severity, the resulting selection rate, and the review URL (or "n/a (no findings selected)" if Step 2 came back empty). Match it to its `[review]` entry by the same date + target. This is the only place a review's real-world outcome — did the author agree with what FIND flagged — survives anywhere, and it's what `singularity-review`'s own `eval/results.md` header names as the calibration signal to watch for drift in. Log this every time, including an all-declined selection.
 
 ## Notes
 
