@@ -198,7 +198,7 @@ skills/posting-review-comments/ posts a user-selected subset of findings as PR c
 agents/                      infra-reviewer.md (active) + adversarial-verifier.md (retained, unused)
 references/                  stack-specific failure taxonomies + shared severity/scaling rules
 hooks/singularity-review/    6 Claude Code hooks (see Hooks table above)
-tests/                       guard.js regression table + liveness (mutation) harness, both run in CI
+tests/                       guard.js regression table, its liveness (mutation) harness, and the check-CLI argv-parsing table -- all run in CI
 scripts/                     sync-kiro-deny-list.js — keeps kiro/'s deny list generated from guard.js
 research/findings.md         design lessons from real, pseudonymized runs, each tied to a concrete change above
 kiro/, settings.snippet.json install configs for Kiro and Claude Code (kiro/singularity-review.json is a {{KIRO_DIR}} template, rendered by bin/cli.js)

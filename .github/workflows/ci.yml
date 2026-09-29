@@ -52,25 +52,8 @@ jobs:
       - name: guard.js liveness (proves the regression table isn't passing by construction)
         run: bash tests/liveness.sh
 
-      - name: check CLI smoke test
-        run: |
-          # +e overrides GitHub Actions' default `bash -e` for run: steps --
-          # without it, the first "cmd; var=$?" line dies on the expected
-          # nonzero (deny) exit before var=$? even runs. Caught by this exact
-          # step failing in CI once already; tests/liveness.sh already got
-          # this right, this step didn't.
-          set +e -uo pipefail
-          node bin/cli.js check "terraform destroy"; deny_exit=$?
-          node bin/cli.js check "terraform plan"; allow_exit=$?
-          if [ "$deny_exit" -ne 1 ]; then
-            echo "::error::expected exit 1 (deny) for 'terraform destroy', got $deny_exit"
-            exit 1
-          fi
-          if [ "$allow_exit" -ne 0 ]; then
-            echo "::error::expected exit 0 (allow) for 'terraform plan', got $allow_exit"
-            exit 1
-          fi
-          echo "check CLI: deny/allow verdicts confirmed"
+      - name: check CLI regression table (argv parsing, not just evaluateCommand)
+        run: node tests/cli-check.test.js
 
       - name: kiro deny list in sync with guard.js DENY_RULES
         run: node scripts/sync-kiro-deny-list.js --check
