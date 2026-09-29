@@ -1,6 +1,6 @@
 {
   "name": "@vamshivardhan01/singularity-review",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Infra-specific code review for Claude Code, Kiro, and Codex: Terraform, Helm, Kubernetes, ArgoCD/GitOps, AWS IAM.",
   "bin": {
     "singularity-review": "bin/cli.js"
@@ -14,6 +14,7 @@
     "kiro/",
     "settings.snippet.json",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "scripts": {

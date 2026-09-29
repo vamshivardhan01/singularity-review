@@ -22,3 +22,5 @@ Thanks for looking at this. It's a small, single-maintainer tool, so the bar is 
 ## Submitting
 
 Open a PR against `main`. It needs one approval (from the maintainer, via CODEOWNERS) and a green CI run before it can merge — there's no way around that, including for the maintainer's own PRs from a second account.
+
+**PR title must follow [Conventional Commits](https://www.conventionalcommits.org/)**: `<type>: <description>` or `<type>(<scope>): <description>` — e.g. `fix: guard.js shell-expansion bypass`, `docs: link wiki pages from README`. Allowed types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`. Enforced by CI (`pr-title.yml`); the description can't start with an uppercase letter.

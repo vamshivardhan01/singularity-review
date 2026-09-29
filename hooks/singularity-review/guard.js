@@ -158,7 +158,12 @@ const DENY_RULES = [
 // as inert display text — `echo "$(terraform destroy)"` — even though
 // command substitution genuinely executes inside double quotes in a real
 // shell. Checking the raw string catches that case too.
-const SHELL_EXPANSION = /\$\(|`|\$\{|\$[A-Za-z_][A-Za-z0-9_]*/;
+// The trailing alternative covers bash's special parameters (`$@`, `$1`,
+// `$#`, `$*`, `$?`, `$$`, `$!`, `$-`) -- a real, reproduced gap in an earlier
+// version of this pattern: `function t() { terraform "$@"; }; t destroy`
+// evaded detection entirely, since `$@` doesn't match a named-variable
+// reference but is just as capable of smuggling an argument through.
+const SHELL_EXPANSION = /\$\(|`|\$\{|\$[A-Za-z_][A-Za-z0-9_]*|\$[@*#?$!0-9-]/;
 const DENY_RULE_KEYWORDS = /\b(terraform|kubectl|argocd|aws|rm|git)\b/;
 
 function hasUnresolvedExpansionRisk(cmd) {
