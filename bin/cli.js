@@ -17,6 +17,27 @@ const CLAUDE_DIR = process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.cl
 const SETTINGS = path.join(CLAUDE_DIR, 'settings.json');
 const KIRO_DIR = process.env.KIRO_CONFIG_DIR || path.join(os.homedir(), '.kiro');
 
+// `check` subcommand — lets anyone evaluate guard.js's actual verdict on a
+// command before they trust it with a real PreToolUse hook. No install, no
+// state, just the same pure evaluateCommand() the hook itself calls.
+//   node bin/cli.js check "<command>" [--cwd <dir>]
+if (process.argv[2] === 'check') {
+  const cmd = process.argv[3];
+  if (!cmd) {
+    console.error('usage: singularity-review check "<command>" [--cwd <dir>]');
+    process.exit(2);
+  }
+  const cwdFlagIdx = process.argv.indexOf('--cwd');
+  const cwd = cwdFlagIdx !== -1 ? process.argv[cwdFlagIdx + 1] : process.cwd();
+  const { evaluateCommand } = require(path.join(HERE, 'hooks', 'singularity-review', 'guard.js'));
+  const { decision, reason } = evaluateCommand(cmd, cwd);
+  const verdict = decision === 'deny' ? 'DENY' : decision === 'ask' ? 'ASK' : 'ALLOW';
+  console.log(`command:  ${cmd}`);
+  console.log(`verdict:  ${verdict}`);
+  if (reason) console.log(`reason:   ${reason}`);
+  process.exit(decision === 'deny' ? 1 : 0);
+}
+
 function isSymlink(p) {
   try { return fs.lstatSync(p).isSymbolicLink(); } catch { return false; }
 }

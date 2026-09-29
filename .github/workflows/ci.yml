@@ -49,6 +49,24 @@ jobs:
       - name: guard.js regression table
         run: node tests/guard.test.js
 
+      - name: guard.js liveness (proves the regression table isn't passing by construction)
+        run: bash tests/liveness.sh
+
+      - name: check CLI smoke test
+        run: |
+          set -uo pipefail
+          node bin/cli.js check "terraform destroy"; deny_exit=$?
+          node bin/cli.js check "terraform plan"; allow_exit=$?
+          if [ "$deny_exit" -ne 1 ]; then
+            echo "::error::expected exit 1 (deny) for 'terraform destroy', got $deny_exit"
+            exit 1
+          fi
+          if [ "$allow_exit" -ne 0 ]; then
+            echo "::error::expected exit 0 (allow) for 'terraform plan', got $allow_exit"
+            exit 1
+          fi
+          echo "check CLI: deny/allow verdicts confirmed"
+
       - name: kiro deny list in sync with guard.js DENY_RULES
         run: node scripts/sync-kiro-deny-list.js --check
 
