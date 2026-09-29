@@ -217,17 +217,7 @@ function readLedger(sessionId) {
 // beyond blanking their quoted argument — a real invocation's command name
 // and flags are never inside quotes at the position DENY_RULES checks, so
 // preserving quoted text as plain text does not weaken real detections.
-// `check` (bin/cli.js's own subcommand, `singularity-review check "<cmd>"`)
-// is included so the checker tool itself can inspect a dangerous-sounding
-// string without guard.js treating that string as a real invocation — real
-// gap found while adding the `check` command: `node bin/cli.js check
-// "terraform destroy"` was itself getting denied, since `node` alone (not
-// `node -e`) isn't in this list and the quoted argument was read as literal
-// command text. `check` never executes its argument, so exempting it here
-// doesn't weaken anything real: an actual `$(...)`/`` ` `` /`$VAR` smuggled
-// inside that argument is still caught by hasUnresolvedExpansionRisk below,
-// which checks the raw command independently of this function.
-const DATA_ARG_COMMANDS = /\b(?:node\s+-e|python[0-9.]*\s+-c|echo|printf|grep|egrep|fgrep|rg|check)\b/;
+const DATA_ARG_COMMANDS = /\b(?:node\s+-e|python[0-9.]*\s+-c|echo|printf|grep|egrep|fgrep|rg)\b/;
 const QUOTED = String.raw`("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')`;
 
 function blank(quoted) { return quoted[0] === '"' ? '""' : "''"; }
