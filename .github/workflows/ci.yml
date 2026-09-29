@@ -54,7 +54,12 @@ jobs:
 
       - name: check CLI smoke test
         run: |
-          set -uo pipefail
+          # +e overrides GitHub Actions' default `bash -e` for run: steps --
+          # without it, the first "cmd; var=$?" line dies on the expected
+          # nonzero (deny) exit before var=$? even runs. Caught by this exact
+          # step failing in CI once already; tests/liveness.sh already got
+          # this right, this step didn't.
+          set +e -uo pipefail
           node bin/cli.js check "terraform destroy"; deny_exit=$?
           node bin/cli.js check "terraform plan"; allow_exit=$?
           if [ "$deny_exit" -ne 1 ]; then
