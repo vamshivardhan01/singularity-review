@@ -79,7 +79,7 @@ At `trivial`, spawn **one** agent running the surviving roles' procedures in a s
 
 **Order every agent prompt against the U-shaped attention curve** — mid-prompt material is retrieved >30% worse. Front: the task, the role, the untrusted-content rule. Middle: bulk reference (prior discussion, issue bodies, carried-forward verdicts, SCAN summary). End: the diff, then a short restatement of the expected output. Never bury the diff between the description and the thread.
 
-**Frame challenge** — only when the PR introduces or restructures a component or delivery mechanism (a new module, chart, service, workflow, integration, or credential path), *not* a value/field/version edit within one. Tell solutions-architect (and platform-engineer for the infra angle) to state the PR's goal independent of its mechanism, name the simplest platform-native mechanism meeting that goal, and flag it when the chosen one is materially heavier — including a reuse-vs-reinvent check against the org's *shared* capabilities, not only the companion PRs the description names. When it fires it is usually the highest-leverage output of the review, because a better mechanism dissolves a stack of within-frame defects at once. These are questions, never oracle-verified defects; no `verify:` tag.
+**Frame challenge** — only when the PR introduces or restructures a component or delivery mechanism (a new module, chart, service, workflow, integration, or credential path), *not* a value/field/version edit within one. Tell infra-reviewer's architecture and platform lenses to state the PR's goal independent of its mechanism, name the simplest platform-native mechanism meeting that goal, and flag it when the chosen one is materially heavier — including a reuse-vs-reinvent check against the org's *shared* capabilities, not only the companion PRs the description names. When it fires it is usually the highest-leverage output of the review, because a better mechanism dissolves a stack of within-frame defects at once. These are questions, never oracle-verified defects; no `verify:` tag.
 
 ## Phase 3 — VERIFY — **DISABLED**
 
@@ -134,7 +134,7 @@ Why it matters: <concrete consequence — what breaks, for whom, under what cond
 Fix: <the specific, actionable change>
 Evidence: <the oracle output pasted verbatim, or the concrete step-by-step failure scenario — this is the whole basis for the finding, since nothing verified it>
 Counter-case checked: <what you looked for that would disprove this, and why it didn't>
-  ↳ caught by platform-engineer · unverified — please confirm
+  ↳ caught by platform lens · unverified — please confirm
 
 🟠 P1 — Urgent (fix next)  /  🟡 P2 — Should fix  /  ⚪ P3 — Minor
 ...same shape...

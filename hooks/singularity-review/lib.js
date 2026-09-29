@@ -280,10 +280,26 @@ function emitDeny(reason) {
   }));
 }
 
+// Softer sibling of emitDeny — surfaces to the user/agent for confirmation
+// instead of silently blocking. Used by guard.js's shell-expansion-risk
+// check, which is a blunt heuristic (unresolved $(...)/`` `...` ``/${...}/$VAR
+// next to a dangerous keyword) that would false-positive on legitimate
+// commands like `terraform apply -var-file=$HOME/foo.tfvars` if it denied
+// outright.
+function emitAsk(reason) {
+  process.stdout.write(JSON.stringify({
+    hookSpecificOutput: {
+      hookEventName: 'PreToolUse',
+      permissionDecision: 'ask',
+      permissionDecisionReason: reason,
+    },
+  }));
+}
+
 module.exports = {
   CLAUDE_DIR, STATE_DIR,
   detectStack,
   statePath, readState, writeState,
   ledgerPath, appendLedger, readLedger,
-  readStdinJSON, emitAdditionalContext, emitDeny, stripQuotedForMatch,
+  readStdinJSON, emitAdditionalContext, emitDeny, emitAsk, stripQuotedForMatch,
 };

@@ -10,7 +10,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { readStdinJSON, emitDeny, stripQuotedForMatch } = require('./lib');
+const { readStdinJSON, emitDeny, emitAsk, stripQuotedForMatch } = require('./lib');
 
 // Splits a (already quote-stripped) command string into naive shell tokens.
 // Good enough for flag/positional-arg detection on the small set of
@@ -138,17 +138,67 @@ const DENY_RULES = [
   [/\brm\s+[^|;&]*\.tfstate\b/, 'rm targeting a .tfstate file is blocked by guard.js — direct deletion of Terraform state, not reversible without a backup. Confirm explicitly with the user first.'],
 ];
 
-readStdinJSON().then(data => {
-  const cmd = (data.tool_input && data.tool_input.command) || '';
-  if (!cmd) { process.exit(0); }
-  const matchTarget = stripQuotedForMatch(cmd);
+// P0 fix: stripQuotedForMatch only blanks out QUOTED spans. It never resolves
+// $(...) / backtick command substitution / ${...} parameter expansion / a
+// bare $VAR reference — so every rule above is checked against the literal,
+// unexpanded string. `terraform $(echo destroy)`, `V=destroy; terraform $V`,
+// and `terraform${IFS}destroy` all run as a real `terraform destroy` in a
+// shell but match none of the DENY_RULES regexes above. This is not exotic:
+// $(...) and $VAR show up in ordinary scripting, not just attacker syntax.
+//
+// Fail-closed, narrow fix: if the RAW command (not matchTarget) contains one
+// of these expansion constructs AND a keyword any DENY_RULES entry cares
+// about, ask instead of silently allowing — safely resolving arbitrary shell
+// expansion without actually running a subshell isn't tractable to do
+// accurately, so this doesn't try to be precise, it just refuses to stay
+// silent.
+//
+// Deliberately checked against the RAW command, not matchTarget: a dangerous
+// command can hide inside a quoted argument that stripQuotedForMatch treats
+// as inert display text — `echo "$(terraform destroy)"` — even though
+// command substitution genuinely executes inside double quotes in a real
+// shell. Checking the raw string catches that case too.
+const SHELL_EXPANSION = /\$\(|`|\$\{|\$[A-Za-z_][A-Za-z0-9_]*/;
+const DENY_RULE_KEYWORDS = /\b(terraform|kubectl|argocd|aws|rm|git)\b/;
 
+function hasUnresolvedExpansionRisk(cmd) {
+  return SHELL_EXPANSION.test(cmd) && DENY_RULE_KEYWORDS.test(cmd);
+}
+
+const EXPANSION_RISK_REASON = 'This command contains shell expansion ($(...), a backtick command substitution, ${...}, or a $VAR reference) alongside a keyword guard.js\'s hard-deny rules check (terraform/kubectl/argocd/aws/rm/git). guard.js cannot safely resolve shell expansion, so it can\'t confirm this isn\'t one of the denied patterns in disguise (a known bypass: `terraform $(echo destroy)`, `V=destroy; terraform $V`, and similar all evade the plain-text rules above). Run it without the indirection so the real command is visible, or confirm explicitly with the user first.';
+
+// Pure decision function — no I/O — so this is unit-testable without
+// spawning a process or faking stdin. The CLI entrypoint below is a thin
+// wrapper over this.
+function evaluateCommand(cmd, cwd) {
+  if (!cmd) return { decision: null };
+  const matchTarget = stripQuotedForMatch(cmd);
   for (const [rule, reason] of DENY_RULES) {
-    const hit = typeof rule === 'function' ? rule(matchTarget, data.cwd) : rule.test(matchTarget);
-    if (hit) {
-      emitDeny(reason);
-      return;
-    }
+    const hit = typeof rule === 'function' ? rule(matchTarget, cwd) : rule.test(matchTarget);
+    if (hit) return { decision: 'deny', reason };
   }
-  process.exit(0); // no rule matched — allow, silent, zero tokens
-}).catch(() => { process.exit(0); });
+  if (hasUnresolvedExpansionRisk(cmd)) { // raw cmd, not matchTarget — see comment above
+    return { decision: 'ask', reason: EXPANSION_RISK_REASON };
+  }
+  return { decision: null };
+}
+
+module.exports = {
+  DENY_RULES,
+  evaluateCommand,
+  hasUnresolvedExpansionRisk,
+  tokenize,
+  terraformApplyHasPlanArg,
+  extractApplyPlanFile,
+  isStalePlanFile,
+};
+
+if (require.main === module) {
+  readStdinJSON().then(data => {
+    const cmd = (data.tool_input && data.tool_input.command) || '';
+    const { decision, reason } = evaluateCommand(cmd, data.cwd);
+    if (decision === 'deny') { emitDeny(reason); return; }
+    if (decision === 'ask') { emitAsk(reason); return; }
+    process.exit(0); // no rule matched — allow, silent, zero tokens
+  }).catch(() => { process.exit(0); });
+}

@@ -25,11 +25,14 @@
       "autoAllowReadonly": true,
       "deniedCommands": [
         ".*terraform\\s+destroy\\b.*",
-        ".*terraform\\s+state\\s+(rm|push|mv)\\b.*",
-        ".*kubectl\\s+delete\\s+(namespace|ns|pv|pvc|persistentvolume|persistentvolumeclaim)\\b.*",
+        ".*kubectl\\s+delete\\s+(ns|namespace)\\b.*",
+        ".*kubectl\\s+delete\\s+(pv|persistentvolume|pvc|persistentvolumeclaim)\\b.*",
         ".*argocd\\s+app\\s+delete\\b.*",
         ".*aws\\s+s3\\s+rb\\b.*",
-        ".*rm\\s+.*\\.tfstate\\b.*"
+        ".*terraform\\s+state\\s+(rm|push|mv)\\b.*",
+        ".*rm\\s+.*-[a-z]*r[a-z]*f[a-z]*\\b.*\\.terraform\\b.*",
+        ".*rm\\s+.*-[a-z]*f[a-z]*r[a-z]*\\b.*\\.terraform\\b.*",
+        ".*rm\\s+[^|;&]*\\.tfstate\\b.*"
       ]
     },
     "web_fetch": {
@@ -44,8 +47,8 @@
     }
   },
   "resources": [
-    "skill:///Users/vamshivardhan/.kiro/skills/singularity-review/SKILL.md",
-    "skill:///Users/vamshivardhan/.kiro/skills/building-platform-code/SKILL.md",
-    "skill:///Users/vamshivardhan/.kiro/skills/posting-review-comments/SKILL.md"
+    "skill://{{KIRO_DIR}}/skills/singularity-review/SKILL.md",
+    "skill://{{KIRO_DIR}}/skills/building-platform-code/SKILL.md",
+    "skill://{{KIRO_DIR}}/skills/posting-review-comments/SKILL.md"
   ]
 }

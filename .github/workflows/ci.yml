@@ -23,9 +23,9 @@ jobs:
             node -e "JSON.parse(require('fs').readFileSync('$f', 'utf8'))"
           done
 
-      - name: Check JS syntax (bin + hooks)
+      - name: Check JS syntax (bin + hooks + scripts + tests)
         run: |
-          for f in bin/cli.js hooks/singularity-review/*.js; do
+          for f in bin/cli.js hooks/singularity-review/*.js scripts/*.js tests/*.js; do
             echo "Checking $f"
             node --check "$f"
           done
@@ -45,6 +45,12 @@ jobs:
               exit 1
             fi
           done
+
+      - name: guard.js regression table
+        run: node tests/guard.test.js
+
+      - name: kiro deny list in sync with guard.js DENY_RULES
+        run: node scripts/sync-kiro-deny-list.js --check
 
       - name: npm pack dry run
         run: npm pack --dry-run

@@ -15,14 +15,15 @@ const { execSync } = require('child_process');
 const HERE = path.resolve(__dirname, '..');
 const CLAUDE_DIR = process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude');
 const SETTINGS = path.join(CLAUDE_DIR, 'settings.json');
+const KIRO_DIR = process.env.KIRO_CONFIG_DIR || path.join(os.homedir(), '.kiro');
 
 function isSymlink(p) {
   try { return fs.lstatSync(p).isSymbolicLink(); } catch { return false; }
 }
 
-function linkDir(label, srcRel, targetRel) {
+function linkDir(label, srcRel, targetRel, baseDir = CLAUDE_DIR) {
   const src = path.join(HERE, srcRel);
-  const target = path.join(CLAUDE_DIR, targetRel);
+  const target = path.join(baseDir, targetRel);
   fs.mkdirSync(path.dirname(target), { recursive: true });
   if (isSymlink(target)) {
     if (fs.readlinkSync(target) === src) {
@@ -119,7 +120,39 @@ fs.mkdirSync(CLAUDE_DIR, { recursive: true });
 fs.writeFileSync(SETTINGS, `${JSON.stringify(settings, null, 2)}\n`);
 console.log('hooks merged into settings.json (existing entries from other tools untouched)');
 
-// --- 5. Reference-file size guard (zero-token, run occasionally) ----------
+// --- 5. Kiro install (only if ~/.kiro already exists — never created from scratch) ---
+if (fs.existsSync(KIRO_DIR)) {
+  console.log('');
+  console.log('== Kiro detected — installing there too ==');
+  for (const skill of ['building-platform-code', 'singularity-review', 'posting-review-comments']) {
+    linkDir(`kiro skill  ${skill}`, path.join('skills', skill), path.join('skills', skill), KIRO_DIR);
+  }
+
+  const kiroAgentSrc = path.join(HERE, 'kiro', 'singularity-review.json');
+  const kiroAgentTarget = path.join(KIRO_DIR, 'agents', 'singularity-review.json');
+  // kiro/singularity-review.json ships as a {{KIRO_DIR}} template, not a
+  // real path — a plain symlink would propagate the literal placeholder
+  // into Kiro's config. Render it instead: read the template, substitute
+  // the real KIRO_DIR (POSIX-slash-normalized, since this may run on
+  // Windows where path.sep is \\), write a real file.
+  try {
+    const template = fs.readFileSync(kiroAgentSrc, 'utf8');
+    const posixKiroDir = KIRO_DIR.split(path.sep).join('/');
+    const rendered = template.split('{{KIRO_DIR}}').join(posixKiroDir);
+    fs.mkdirSync(path.dirname(kiroAgentTarget), { recursive: true });
+    if (fs.existsSync(kiroAgentTarget) && !isSymlink(kiroAgentTarget)) {
+      const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/, '').replace('T', '');
+      fs.copyFileSync(kiroAgentTarget, `${kiroAgentTarget}.bak.${stamp}`);
+      console.log(`kiro agent config  backed up existing file`);
+    }
+    fs.writeFileSync(kiroAgentTarget, rendered);
+    console.log('kiro agent config  rendered and written');
+  } catch (e) {
+    console.log(`kiro agent config  FAILED — ${e.message}`);
+  }
+}
+
+// --- 6. Reference-file size guard (zero-token, run occasionally) ----------
 console.log('');
 console.log('== reference file sizes ==');
 const refDir = path.join(HERE, 'references');
@@ -129,7 +162,7 @@ for (const f of fs.readdirSync(refDir).filter((n) => n.endsWith('.md')).sort()) 
   console.log(`  ${f}: ${lines} lines — ${flag}`);
 }
 
-// --- 6. Scanner availability report ---------------------------------------
+// --- 7. Scanner availability report ---------------------------------------
 console.log('');
 console.log('== scanner availability ==');
 function commandExists(name) {
