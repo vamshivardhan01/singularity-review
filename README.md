@@ -76,15 +76,15 @@ All PR/repo identifiers above are pseudonyms from this system's own eval set (se
 
 ## Compared to Generic AI Reviewers
 
-CodeRabbit, Greptile, and PR-Agent are all real, useful tools — none of them are built around infra as a first-class concern, and it shows in what they're actually optimized to catch:
+CodeRabbit, Greptile, and PR-Agent are all real, useful tools, general-purpose by design. This table is this project's own positioning, based on how those tools are generally used and marketed — not an audit of their current internals, which weren't independently verified for this comparison:
 
 | | Generic AI reviewers (CodeRabbit, Greptile, PR-Agent) | Singularity Review |
 |---|---|---|
 | **Trained/tuned for** | App code: style, common bug patterns, PR summarization across any language | Infra-specific failure classes: blast radius, RBAC over-grant, drift, sync behavior, IAM trust boundaries |
-| **Evidence behind a finding** | The model's read of the diff | A real scanner/oracle run first (`terraform validate`, `helm template \| kube-score`, `checkov`) — the model reasons over that output, not just the diff text |
-| **Concept of "destroys state" vs. "adds a file"** | Not modeled — a `terraform destroy` and a comment typo are just two lines in a diff | A hard-coded, hook-level deny list blocks the genuinely irreversible commands regardless of what the model decides (`guard.js`) |
-| **RBAC/IAM reasoning** | General "looks risky" pattern matching, if any | Explicit signal table distinguishing a genuine cluster-wide privilege-escalation grant from routine scoped RBAC (a real, measured cost bug this project hit and fixed — see Key Decisions) |
-| **False-positive handling** | Varies by tool, generally a single pass | A mandatory counter-case search before any finding ships — actively looks for the guard/test/comment that would disprove its own finding |
+| **Evidence behind a finding** | Primarily the model's read of the diff, as far as their public positioning describes | A real scanner/oracle run first (`terraform validate`, `helm template \| kube-score`, `checkov`) — the model reasons over that output, not just the diff text |
+| **Concept of "destroys state" vs. "adds a file"** | Not a documented, first-class concept in these tools — a `terraform destroy` and a comment typo are just two lines in a diff | A hard-coded, hook-level deny list blocks the genuinely irreversible commands regardless of what the model decides (`guard.js`) |
+| **RBAC/IAM reasoning** | Not a specialized capability these tools advertise | Explicit signal table distinguishing a genuine cluster-wide privilege-escalation grant from routine scoped RBAC (a real, measured cost bug this project hit and fixed — see Key Decisions) |
+| **False-positive handling** | Varies by tool and changes over time — check their own docs for current behavior | A mandatory counter-case search before any finding ships — actively looks for the guard/test/comment that would disprove its own finding |
 
 None of this makes the generic tools worse at what they're for — reviewing app code, they're faster to set up and cover far more languages. This project doesn't compete with them there. It exists for the diffs where "does this compile and look reasonable" isn't the question that matters — "what does this destroy, and has anyone actually confirmed the alternative works" is.
 
