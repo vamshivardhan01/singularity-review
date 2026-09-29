@@ -49,6 +49,12 @@ jobs:
       - name: guard.js regression table
         run: node tests/guard.test.js
 
+      - name: guard.js liveness (proves the regression table isn't passing by construction)
+        run: bash tests/liveness.sh
+
+      - name: check CLI regression table (argv parsing, not just evaluateCommand)
+        run: node tests/cli-check.test.js
+
       - name: kiro deny list in sync with guard.js DENY_RULES
         run: node scripts/sync-kiro-deny-list.js --check
 

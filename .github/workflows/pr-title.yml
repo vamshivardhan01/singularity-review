@@ -5,7 +5,11 @@ on:
     types: [opened, edited, reopened, synchronize]
 
 permissions:
-  pull-requests: read
+  # write, not read: the action posts an explanatory comment back to the PR
+  # when the title is invalid -- read-only produced a real "Resource not
+  # accessible by integration" failure the first time this ran for real,
+  # confirmed against the actual job log, not assumed from the action's docs.
+  pull-requests: write
 
 jobs:
   validate:

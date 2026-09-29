@@ -10,6 +10,7 @@ Infra-specific code review for Claude Code, Kiro, and Codex: Terraform, Helm, Ku
 Built by a platform engineer who runs Terraform, Helm, and ArgoCD against real production AWS/Kubernetes infrastructure day to day — this exists because the generic AI reviewers I actually used at work kept saying "no issues" on diffs that would have paged someone at 3am. Generic code-review skills are tuned for app code — XSS, N+1 queries, null checks. They have no concept of `terraform destroy`, an ArgoCD `prune`, or an SCP lockout, so they wave infra changes through that aren't actually safe. *(Bio draft — replace with your own wording/specifics before merge; see the PR description.)*
 
 ## Contents
+- [The One Part That's Not a Vibe](#the-one-part-thats-not-a-vibe)
 - [See It Catch Something](#see-it-catch-something)
 - [How It Works](#how-it-works)
 - [Key Decisions](#key-decisions)
@@ -22,6 +23,39 @@ Built by a platform engineer who runs Terraform, Helm, and ArgoCD against real p
 - [Contributing](#contributing)
 - [Roadmap & FAQ](#roadmap--faq)
 - [Repo Layout](#repo-layout)
+
+## The One Part That's Not a Vibe
+
+Everything else in this system — SCAN/FIND/REPORT below — is LLM judgment: evidence-backed, but judgment, and admittedly unverified since VERIFY is off by default (see Risks). `guard.js` is different. It's a pure function (`evaluateCommand(cmd, cwd)`), unit-tested, and it's the one place a genuinely irreversible command gets blocked regardless of what the model decides to do — not because the model was asked nicely, because the hook says no.
+
+Try it yourself, no install required — clone the repo and run:
+
+```
+$ node bin/cli.js check "terraform destroy"
+command:  terraform destroy
+verdict:  DENY
+reason:   terraform destroy is blocked by guard.js. Run `blast-radius.sh` on a plan first, confirm with the user explicitly, then run destroy outside this hook path if truly intended.
+
+$ node bin/cli.js check "git push --force origin main"
+command:  git push --force origin main
+verdict:  DENY
+reason:   force-push to main/master is blocked. Confirm explicitly with the user; this can overwrite others' work.
+
+$ node bin/cli.js check 'V=destroy; terraform $V'
+command:  V=destroy; terraform $V
+verdict:  ASK
+reason:   This command contains shell expansion ($(...), a backtick command substitution, ${...}, or a $VAR reference) alongside a keyword guard.js's hard-deny rules check (terraform/kubectl/argocd/aws/rm/git). guard.js cannot safely resolve shell expansion, so it can't confirm this isn't one of the denied patterns in disguise. Run it without the indirection so the real command is visible, or confirm explicitly with the user first.
+
+$ node bin/cli.js check "rm -rf node_modules"
+command:  rm -rf node_modules
+verdict:  ALLOW
+```
+
+That's a real, copy-pasteable transcript, not a screenshot someone has to trust wasn't staged — run it yourself and you'll get the identical output. **Scope, stated plainly:** this covers a short, deliberate list of infra-destructive commands (`terraform`/`kubectl`/`argocd`/`aws`/`rm`/`git`-scoped — see the Hooks table below for the full list), not general dangerous-shell-one-liner detection. `curl <url> | sudo bash` is out of scope by design — a different class of tool would need to own that.
+
+Two more ways to check this claim, not just take it on our word:
+- **Two independent tests prove this**, not one. `tests/guard.test.js` is a 50-case regression table. `tests/liveness.sh` proves that table isn't passing by construction: it guts `evaluateCommand` to a no-op, re-runs the same suite against the gutted version, and asserts the deny/ask cases actually go red. A test suite with 100% pass and zero mutation coverage looks identical from the outside to one that isn't connected to anything — this is the check that tells the difference. Both run in CI on every PR.
+- **Read the function yourself.** `hooks/singularity-review/guard.js` is ~190 lines, no dependencies, every rule commented with why it exists.
 
 ## See It Catch Something
 
@@ -106,6 +140,8 @@ kiro-cli chat --agent singularity-review
 
 **Using it:** "review this PR" runs SCAN → FIND → REPORT and only reports findings with evidence attached. "post these" (after reviewing the report) invokes `posting-review-comments`, which shows numbered findings and waits for you to pick which go live. Nothing reaches GitHub without an explicit choice.
 
+**Checking a command before you trust the hook:** `node bin/cli.js check "<command>"` (or `singularity-review check "<command>"` once installed) prints `guard.js`'s actual verdict — `DENY`/`ASK`/`ALLOW` plus the reasoning — with no install and no state. See [The One Part That's Not a Vibe](#the-one-part-thats-not-a-vibe) for a real transcript.
+
 ## What Access It Needs
 
 - **Local scanners** (`terraform`, `checkov`, `kube-score`, etc.) run read-only against your working tree — plan/render/lint, never apply. `bin/cli.js` reports which ones are missing on install; it doesn't install them for you.
@@ -116,7 +152,7 @@ kiro-cli chat --agent singularity-review
 
 | Hook | Event | Behavior |
 |---|---|---|
-| `guard.js` | `PreToolUse(Bash)` | Hard-denies a short list of irreversible commands (`terraform destroy`, unsaved-plan apply, `kubectl delete ns/pv`, force-push to main, `argocd app delete`, `s3 rb`), and **asks** (doesn't silently allow) when a command mixes shell expansion (`$(...)`, `` ` ``, `${...}`, a bare `$VAR`) with one of those same keywords, since a deny rule can't reliably match an unresolved expansion. The only hard block in the system; everything else is advisory. |
+| `guard.js` | `PreToolUse(Bash)` | Hard-denies a short list of irreversible commands (`terraform destroy`, unsaved-plan apply, `kubectl delete ns/pv`, force-push to main, `argocd app delete`, `s3 rb`), and **asks** (doesn't silently allow) when a command mixes shell expansion (`$(...)`, `` ` ``, `${...}`, a bare `$VAR` or special parameter like `$@`) with one of those same keywords, since a deny rule can't reliably match an unresolved expansion. The only hard block in the system; everything else is advisory. Evaluate any command against it directly with `node bin/cli.js check "<command>"` — see [The One Part That's Not a Vibe](#the-one-part-thats-not-a-vibe). |
 | `scan-on-write.js` | `PostToolUse(Write\|Edit)` | Fast fmt/lint check on infra file writes, debounced 30s per file. |
 | `charter-inject.js` | `SessionStart` | One pointer to the skill, once per session. |
 | `stack-switch-inject.js` | `UserPromptSubmit` | Emits only when the detected stack changes mid-session. |
@@ -136,7 +172,9 @@ kiro-cli chat --agent singularity-review
 
 `skills/singularity-review/eval/` is a small golden dataset: real PRs (repo names pseudonymized, per `CONTRIBUTING.md`) with confirmed ground truth, used to check that a change to the agent or skill files doesn't regress what it catches. Currently 2 cases — the sample in [See It Catch Something](#see-it-catch-something) is pulled directly from one of them; see `eval/README.md` for how to add more and what shapes are still missing. This is the single biggest open reliability gap in the project: every cost/effectiveness tuning decision in the Key Decisions table was reasoned from architecture, and only a couple of them have a regression case backing them. More cases > more features, right now.
 
-`tests/guard.test.js` is a plain regression table (no framework, 48 cases) for `guard.js`'s DENY_RULES matching logic — the exact code class that produced a P0 finding (every hard-deny rule bypassable via shell expansion) with zero coverage to catch it. Includes real-filesystem cases for the stale-plan-file predicate specifically, after an earlier version of this suite passed every case with `cwd: null` and never actually exercised it. Run: `node tests/guard.test.js`. Wired into CI.
+`tests/guard.test.js` is a plain regression table (no framework, 50 cases) for `guard.js`'s DENY_RULES matching logic — the exact code class that produced a P0 finding (every hard-deny rule bypassable via shell expansion) with zero coverage to catch it. Includes real-filesystem cases for the stale-plan-file predicate specifically, after an earlier version of this suite passed every case with `cwd: null` and never actually exercised it. Run: `node tests/guard.test.js`. Wired into CI.
+
+`tests/liveness.sh` answers the next question: does that regression table actually prove anything? It guts `evaluateCommand` to a no-op, re-runs the exact same 50 cases against the gutted version via a `GUARD_MODULE` override, and asserts the deny/ask cases go red. A green regression suite and a suite that isn't wired to anything real look identical from outside — this is the check that would have caught it if they weren't. Run: `bash tests/liveness.sh`. Wired into CI.
 
 ## Contributing
 
@@ -160,11 +198,11 @@ skills/posting-review-comments/ posts a user-selected subset of findings as PR c
 agents/                      infra-reviewer.md (active) + adversarial-verifier.md (retained, unused)
 references/                  stack-specific failure taxonomies + shared severity/scaling rules
 hooks/singularity-review/    6 Claude Code hooks (see Hooks table above)
-tests/                       guard.js regression table, run in CI
+tests/                       guard.js regression table, its liveness (mutation) harness, and the check-CLI argv-parsing table -- all run in CI
 scripts/                     sync-kiro-deny-list.js — keeps kiro/'s deny list generated from guard.js
 research/findings.md         design lessons from real, pseudonymized runs, each tied to a concrete change above
 kiro/, settings.snippet.json install configs for Kiro and Claude Code (kiro/singularity-review.json is a {{KIRO_DIR}} template, rendered by bin/cli.js)
-bin/cli.js                   the installer (Node stdlib only, no dependencies)
+bin/cli.js                   the installer, plus `check "<command>"` for evaluating guard.js directly (Node stdlib only, no dependencies)
 install.sh                   thin bash shim -> bin/cli.js, for non-npm clones
 wiki/                        source for the GitHub wiki, synced to it on merge to main
 .github/                     CI, issue/PR templates, CODEOWNERS, dependabot

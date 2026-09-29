@@ -17,6 +17,44 @@ const CLAUDE_DIR = process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.cl
 const SETTINGS = path.join(CLAUDE_DIR, 'settings.json');
 const KIRO_DIR = process.env.KIRO_CONFIG_DIR || path.join(os.homedir(), '.kiro');
 
+// `check` subcommand — lets anyone evaluate guard.js's actual verdict on a
+// command before they trust it with a real PreToolUse hook. No install, no
+// state, just the same pure evaluateCommand() the hook itself calls.
+//   node bin/cli.js check "<command>" [--cwd <dir>]
+// --cwd works before or after the command -- a real gap found and fixed
+// here: the first version only looked for --cwd via a flat indexOf() and
+// took argv[3] as the command unconditionally, so `check --cwd /tmp "cmd"`
+// (flags-before-positionals, a completely normal CLI habit) silently
+// evaluated the literal string "--cwd" as the command and dropped the real
+// one -- a false ALLOW on whatever was actually being checked, which is the
+// wrong direction to fail silently for a tool whose whole point is "check
+// before you trust it."
+if (process.argv[2] === 'check') {
+  const rest = process.argv.slice(3);
+  let cwd = process.cwd();
+  const positional = [];
+  for (let i = 0; i < rest.length; i++) {
+    if (rest[i] === '--cwd') {
+      cwd = rest[i + 1];
+      i++;
+    } else {
+      positional.push(rest[i]);
+    }
+  }
+  const cmd = positional[0];
+  if (!cmd || positional.length > 1 || !cwd) {
+    console.error('usage: singularity-review check "<command>" [--cwd <dir>]');
+    process.exit(2);
+  }
+  const { evaluateCommand } = require(path.join(HERE, 'hooks', 'singularity-review', 'guard.js'));
+  const { decision, reason } = evaluateCommand(cmd, cwd);
+  const verdict = decision === 'deny' ? 'DENY' : decision === 'ask' ? 'ASK' : 'ALLOW';
+  console.log(`command:  ${cmd}`);
+  console.log(`verdict:  ${verdict}`);
+  if (reason) console.log(`reason:   ${reason}`);
+  process.exit(decision === 'deny' ? 1 : 0);
+}
+
 function isSymlink(p) {
   try { return fs.lstatSync(p).isSymbolicLink(); } catch { return false; }
 }

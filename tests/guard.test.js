@@ -11,7 +11,12 @@ const assert = require('assert');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { evaluateCommand } = require('../hooks/singularity-review/guard.js');
+// Overridable so tests/liveness.sh can point this same suite at a
+// deliberately gutted copy of guard.js and confirm these cases actually go
+// red -- proof the suite is wired to real logic, not just passing by
+// construction. Normal `node tests/guard.test.js` runs use the real file.
+const GUARD_MODULE = process.env.GUARD_MODULE || '../hooks/singularity-review/guard.js';
+const { evaluateCommand } = require(GUARD_MODULE);
 
 // Real-filesystem fixtures for the stale-plan-file predicate (DENY_RULES
 // entry #3, `isStalePlanFile`) -- every case below that passes cwd=null
@@ -72,6 +77,8 @@ const CASES = [
   ['node -e "console.log(\'terraform destroy\')"', null, null, 'node -e string literal is data, not a command'],
   ['grep -rn "terraform destroy" .', null, null, 'grep pattern argument is data, not a command'],
   ['git commit -m "fix: terraform apply -f" && git push origin feature-x', null, null, 'glued semicolon/&& tokenization: message is data, push is to a feature branch'],
+  ['node bin/cli.js check "terraform destroy"', null, null, 'the check subcommand inspecting a string is not a real invocation -- real gap found and fixed while adding check: node alone (not node -e) wasn\'t in DATA_ARG_COMMANDS, so this used to deny the check command itself'],
+  ['singularity-review check "kubectl delete ns staging"', null, null, 'same exemption via the installed binary name, not just the repo-relative path'],
 
   // --- P0 bypass cases: shell expansion alongside a dangerous keyword now asks ---
   ['terraform $(echo destroy)', null, 'ask', 'command substitution hides the real subcommand'],
